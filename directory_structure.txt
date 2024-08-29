@@ -1,16 +1,13 @@
-Folder PATH listing for volume OS
-Volume serial number is A6BD-1F2E
 C:.
 |   .env
 |   directory_structure.txt
 |   poetry.lock
 |   pyproject.toml
 |   README.md
+|   .gitattributes
+|   .gitignore
 |   
 +---.venv
-|   |   .gitignore
-|   |   pyvenv.cfg
-|   |   
     
 +---backend
 |   |   config.py
@@ -74,53 +71,6 @@ C:.
 |               Process.js
 |               Results.js
 |               
-+---handbook_files
-|       Brandon_Claude_handbook.txt
-|       GPT with GPT handbook.txt
-|       GPT with GPT handbook_2.txt
-|       GPT with GROQ handbook.txt
-|       GPT with GROQ handbook_2.txt
-|       handbook_db_test.txt
-|       handbook_db_test_2.txt
-|       Handbook_test.txt
-|       Handbook_test_GPT.txt
-|       
-+---input_files
-|       20240820-123836 Day_1.wav
-|       20240822-123714 Day_2.wav
-|       note_crew basic design001.jpg
-|       PI Excellence Notes Day_1.pg1.jpg
-|       PI Excellence Notes Day_1.pg2.jpg
-|       PI Excellence Notes Day_2.pg.1.jpg
-|       PI Excellence Notes Day_2.pg2.jpg
-|       
-+---output_files_audio
-|       whisper_transcription Day_1.txt
-|       whisper_transcription Day_1_audited.txt
-|       whisper_transcription Day_2.txt
-|       whisper_transcription Day_2_audited.txt
-|       
-+---output_key_points
-|       Day_1_audited_key_points.txt
-|       Day_2_audited_key_points.txt
-|       
-+---output_txt_files
-|       PI Excellence Notes Day_1.pg1.txt
-|       PI Excellence Notes Day_2.pg.1.txt
-|       
-+---summary_files
-|       Claude_3.5_Crash.txt
-|       DAY 1 full summary.txt
-|       Day 2 full summary.txt
-|       GPT Summary Day_1.txt
-|       GPT Summary Day_1_with_key_points.txt
-|       GPT Summary Day_2.txt
-|       GPT Summary Day_2_with_key_points.txt
-|       RAMOS PI Excellence Day_1 summary.txt
-|       RAMOS PI Excellence Day_1 summary_with_key_points.txt
-|       RAMOS PI Excellence Day_2 summary.txt
-|       RAMOS PI Excellence Day_2 summary_with_key_points.txt
-|       
 \---tests
         check_cuda.py
         test_processors.py
