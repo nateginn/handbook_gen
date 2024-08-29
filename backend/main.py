@@ -1,257 +1,135 @@
 import os
 import logging
-from tools.whisper_tool import WhisperTool
-from tools.ocr_tool import process_image
-from tools.merge_tool import MergeTool
-from tools.audio_transcript_Key_points import AudioTranscriptKeyPoints
-from tools.handbook import HandbookCreator
-from tools.db_handler import DatabaseHandler
-import openai
+import asyncio
+from dotenv import load_dotenv
+from backend.services.task_manager import TaskManager, FileType
+from backend.database.db_handler import DatabaseHandler
+
+# Load environment variables
+load_dotenv()
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # Directories
-input_dir = r"C:\Users\nginn\SE Programs\PYTHON\Note_Crew\input_files"
-output_audio_dir = r"C:\Users\nginn\SE Programs\PYTHON\Note_Crew\output_files_audio"
-output_ocr_dir = r"C:\Users\nginn\SE Programs\PYTHON\Note_Crew\output_txt_files"
-output_key_points_dir = r"C:\Users\nginn\SE Programs\PYTHON\Note_Crew\output_key_points"
+base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+input_dir = os.path.join(base_dir, "input_files")
+output_dir = os.path.join(base_dir, "output_files")
 
 def create_directories():
-    directories = [input_dir, output_audio_dir, output_ocr_dir, output_key_points_dir]
-    for directory in directories:
-        os.makedirs(directory, exist_ok=True)
-        logging.info(f"Directory created or already exists: {directory}")
+    os.makedirs(input_dir, exist_ok=True)
+    os.makedirs(output_dir, exist_ok=True)
+    logging.info(f"Directories created or already exist: {input_dir}, {output_dir}")
 
-def get_file_list(directory, extension):
+def get_file_list(directory):
     try:
-        return [f for f in os.listdir(directory) if f.endswith(extension)]
+        return [f for f in os.listdir(directory) if os.path.isfile(os.path.join(directory, f))]
     except FileNotFoundError:
-        print(f"Error: Directory not found: {directory}")
+        logging.error(f"Directory not found: {directory}")
         return []
 
-def user_select_file(file_list, file_type):
-    if not file_list:
-        print(f"No {file_type} files found.")
-        return None
-    print(f"\nAvailable {file_type} files:")
-    for idx, file in enumerate(file_list, 1):
-        print(f"{idx}. {file}")
-    choice = input(f"Enter the number of the {file_type} file you want to process (or 0 to skip): ")
-    if choice.isdigit() and 0 < int(choice) <= len(file_list):
-        return file_list[int(choice) - 1]
-    return None
-
-def user_select_multiple_files(file_list, file_type):
+def user_select_files(file_list):
     selected_files = []
-    while file_list:
-        print(f"\nAvailable {file_type} files:")
+    while True:
+        print("\nAvailable files:")
         for idx, file in enumerate(file_list, 1):
             print(f"{idx}. {file}")
-        choice = input(f"Enter the number of the {file_type} file you want to include (or 0 to finish): ")
+        choice = input("Enter the number of the file to process (or 0 to finish): ")
         if choice == '0':
             break
         if choice.isdigit() and 0 < int(choice) <= len(file_list):
-            selected_file = file_list[int(choice) - 1]
-            selected_files.append(selected_file)
-            file_list.remove(selected_file)
+            selected_files.append(file_list[int(choice) - 1])
         else:
             print("Invalid choice. Please try again.")
     return selected_files
 
-def transcribe_audio(file_path, output_path):
-    whisper_tool = WhisperTool()
-    transcription = whisper_tool.transcribe_audio(file_path)
-    with open(output_path, 'w', encoding='utf-8') as f:
-        f.write(transcription)
-    logging.info(f"Audio transcription saved to {output_path}")
+async def process_files(task_manager, selected_files):
+    for file in selected_files:
+        file_path = os.path.join(input_dir, file)
+        file_type = get_file_type(file)
+        if file_type:
+            task_manager.add_task(file_path, file_type)
+    
+    await task_manager.run()
 
-def process_transcriptions():
-    processed_files = []
-
-    while True:
-        # Process audio files
-        remaining_wav_files = get_file_list(input_dir, '.wav')
-        if remaining_wav_files:
-            print("\nAudio Transcription:")
-            selected_wav = user_select_file(remaining_wav_files, 'audio')
-            if selected_wav:
-                wav_output_path = os.path.join(output_audio_dir, f"{os.path.splitext(selected_wav)[0]}.txt")
-                transcribe_audio(os.path.join(input_dir, selected_wav), wav_output_path)
-                processed_files.append(f"Audio: {selected_wav}")
-                remaining_wav_files.remove(selected_wav)
-
-        # Process image files
-        remaining_jpg_files = get_file_list(input_dir, '.jpg')
-        while remaining_jpg_files:
-            print("\nImage OCR:")
-            selected_jpg = user_select_file(remaining_jpg_files, 'image')
-            if selected_jpg:
-                jpg_input_path = os.path.join(input_dir, selected_jpg)
-                jpg_output_path = os.path.join(output_ocr_dir, f"{os.path.splitext(selected_jpg)[0]}.txt")
-                try:
-                    process_image(jpg_input_path, jpg_output_path)
-                    processed_files.append(f"Image: {selected_jpg}")
-                except openai.OpenAIError as e:
-                    logging.error(f"An error occurred during OCR processing: {str(e)}")
-                    print(f"Error: {str(e)}")
-
-                remaining_jpg_files.remove(selected_jpg)
-
-                if remaining_jpg_files:
-                    another = input("Do you want to transcribe another image? (yes/no): ").strip().lower()
-                    if another != 'yes':
-                        break
-            else:
-                break
-
-        if not remaining_wav_files and not remaining_jpg_files:
-            print("\nNo more files to process.")
-            break
-
-        rerun = input("\nDo you want to process any remaining files? (yes/no): ").strip().lower()
-        if rerun != 'yes':
-            break
-
-    return processed_files
-
-def extract_key_points():
-    key_points_extractor = AudioTranscriptKeyPoints()
-    key_points_extractor.process_file()
-
-def merge_files():
-    merge_tool = MergeTool()
-
-    print("\nSelect files for merging:")
-    audio_files = get_file_list(output_audio_dir, '.txt')
-    ocr_files = get_file_list(output_ocr_dir, '.txt')
-
-    selected_audio = user_select_multiple_files(audio_files, 'audio transcript')
-    selected_ocr = user_select_multiple_files(ocr_files, 'OCR transcript')
-
-    if not selected_audio and not selected_ocr:
-        print("No files selected for merging.")
-        return
-
-    selected_files = [os.path.join(output_audio_dir, f) for f in selected_audio] + \
-                     [os.path.join(output_ocr_dir, f) for f in selected_ocr]
-
-    # Select key points file
-    key_points_files = get_file_list(output_key_points_dir, '.txt')
-    if key_points_files:
-        print("\nSelect a key points file to incorporate:")
-        selected_key_points = user_select_file(key_points_files, 'key points')
-        key_points_path = os.path.join(output_key_points_dir, selected_key_points) if selected_key_points else None
+def get_file_type(file_name):
+    extension = os.path.splitext(file_name)[1].lower()
+    if extension in ['.wav', '.mp3']:
+        return FileType.AUDIO
+    elif extension in ['.jpg', '.png', '.pdf']:
+        return FileType.IMAGE
+    elif extension == '.txt':
+        return FileType.TEXT
     else:
-        print("No key points files found.")
-        key_points_path = None
+        logging.warning(f"Unsupported file type: {file_name}")
+        return None
 
-    summary_name = input("Enter a name for the summary file: ")
+def display_results(task_manager):
+    print("\nProcessing Results:")
+    for file_path, task in task_manager.tasks.items():
+        print(f"File: {os.path.basename(file_path)}")
+        print(f"Status: {task.status}")
+        if task.status == TaskStatus.COMPLETED:
+            print(f"Result: {task.result[:100]}..." if task.result else "No result")
+        elif task.status == TaskStatus.NEEDS_VERIFICATION:
+            print(f"Needs verification. Low confidence segments: {len(task.low_confidence_segments)}")
+        elif task.status == TaskStatus.FAILED:
+            print(f"Error: {task.error}")
+        print()
 
-    merge_tool.process_files(selected_files, summary_name, key_points_path)
-
-def create_handbook():
-    handbook_creator = HandbookCreator()
-    handbook_creator.process_files()
-
-def create_handbook_with_db():
-    try:
-        db = DatabaseHandler()
-        db.connect()
-        db.create_tables()
-
-        # Get list of files in output directories
-        audio_files = get_file_list(output_audio_dir, '.txt')
-        ocr_files = get_file_list(output_ocr_dir, '.txt')
-
-        # User selection of files
-        print("\nSelect audio transcript files to include:")
-        selected_audio = user_select_multiple_files(audio_files, 'audio transcript')
-        print("\nSelect OCR transcript files to include:")
-        selected_ocr = user_select_multiple_files(ocr_files, 'OCR transcript')
-
-        # Insert selected files into database
-        for file in selected_audio:
-            content = db.read_file_content(os.path.join(output_audio_dir, file))
-            if content:
-                db.insert_data("audio_transcriptions", file, content)
-                print(f"Inserted {file} into audio_transcriptions")
-
-        for file in selected_ocr:
-            content = db.read_file_content(os.path.join(output_ocr_dir, file))
-            if content:
-                db.insert_data("handwritten_notes", file, content)
-                print(f"Inserted {file} into handwritten_notes")
-
-        # Retrieve all content from database
-        all_content = db.retrieve_all_data()
-
-        # Create handbook using all content
-        handbook_creator = HandbookCreator()
-        final_handbook, tokens_used = handbook_creator.create_handbook(all_content)
-
-        # Save the final handbook
-        file_name = input("Enter a name for the handbook file: ")
-        handbook_creator.save_handbook(final_handbook, file_name)
-        print(f"Handbook created successfully. Tokens used: {tokens_used}")
-
-        # Clear the database
-        db.clear_database()
-    except Exception as e:
-        print(f"An error occurred during handbook creation: {e}")
-    finally:
-        db.close_connection()
-
-def print_instructions():
-    print("\nWebinar Notes Processor - Instructions")
-    print("1. Process Transcriptions: Transcribe audio files and perform OCR on images.")
-    print("2. Extract Key Points: Analyze audio transcripts to identify key points.")
-    print("3. Merge and Summarize: Combine multiple transcripts into a single summary.")
-    print("4. Create Handbook: Generate a comprehensive handbook from processed files.")
-    print("5. Create Handbook (Database-Assisted): Use a database to handle larger files more efficiently.")
-    print("   - This option allows you to select specific files for processing.")
-    print("   - It uses a database to manage content, potentially improving performance with large files.")
-    print("6. Exit: Close the program.")
-
-def main():
+async def main():
     create_directories()
-    while True:
-        print("\nWebinar Notes Processor")
-        print("1. Process Transcriptions")
-        print("2. Extract Key Points from Audio Transcript")
-        print("3. Merge and Summarize Files")
-        print("4. Create Handbook")
-        print("5. Create Handbook (Database-Assisted)")
-        print("6. Exit")
-        print("7. Show Instructions")
+    db_handler = DatabaseHandler()
+    task_manager = TaskManager()
 
-        choice = input("Enter your choice (1-7): ")
+    while True:
+        print("\nNote Crew 2 - Backend Testing")
+        print("1. Process Files")
+        print("2. Display Task Status")
+        print("3. Verify OCR Results")
+        print("4. Generate Handbook")
+        print("5. Exit")
+
+        choice = input("Enter your choice (1-5): ")
 
         if choice == '1':
-            processed_files = process_transcriptions()
-            if processed_files:
-                print("\nSummary of processed files:")
-                for file in processed_files:
-                    print(f"- {file}")
-            else:
-                print("\nNo files were processed.")
+            file_list = get_file_list(input_dir)
+            selected_files = user_select_files(file_list)
+            await process_files(task_manager, selected_files)
+            display_results(task_manager)
+
         elif choice == '2':
-            extract_key_points()
+            status = task_manager.get_status()
+            print("\nCurrent Task Status:")
+            for key, value in status.items():
+                print(f"{key}: {value}")
+
         elif choice == '3':
-            merge_files()
+            tasks_needing_verification = task_manager.get_tasks_needing_verification()
+            if not tasks_needing_verification:
+                print("No tasks need verification.")
+            else:
+                for task in tasks_needing_verification:
+                    print(f"\nFile: {os.path.basename(task.file_path)}")
+                    print("Low confidence segments:")
+                    for segment in task.low_confidence_segments:
+                        print(f"- {segment['text']} (Confidence: {segment['confidence']})")
+                    verified_text = input("Enter the corrected text (or press Enter to skip): ")
+                    if verified_text:
+                        await task_manager.apply_user_verification(task.file_path, {"text": verified_text, "confidence": 1.0})
+
         elif choice == '4':
-            create_handbook()
+            topic = input("Enter the topic for the handbook: ")
+            await task_manager.create_handbook(topic)
+
         elif choice == '5':
-            create_handbook_with_db()
-        elif choice == '6':
             print("Exiting the program. Goodbye!")
             break
-        elif choice == '7':
-            print_instructions()
+
         else:
             print("Invalid choice. Please try again.")
 
     logging.info("Exiting the script.")
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

@@ -17,13 +17,13 @@ C:.
 |   |   
 |   +---database
 |   |       db_handler.py
-|   |       webinar_notes.db
 |   |       
 |   +---processors
 |   |   |   audio_transcript_Key_points.py
 |   |   |   ocr_tool.py
 |   |   |   ocr_tool.txt
 |   |   |   whisper_tool.py
+|   |   |   you_tube_transcription.py
 |   |   |   
 |   |   \---__pycache__
 |   |           audio_transcript_Key_points.cpython-312.pyc
@@ -38,6 +38,7 @@ C:.
 |   |       handbook.txt
 |   |       merge_tool.py
 |   |       merge_tool.txt
+|   |       task_manager.py    
 |   |       
 |   +---src
 |   |   \---note_crew
