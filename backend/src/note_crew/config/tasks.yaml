@@ -1,0 +1,22 @@
+# tasks.yaml
+
+audio_transcription_task:
+  description: >
+    Transcribe the provided audio file, accurately identifying each speaker and converting the spoken words into a text script.
+  expected_output: >
+    A text file containing the full transcript, with speakers clearly identified.
+  agent: whisper_transcriber
+
+ocr_transcription_task:
+  description: >
+    Convert the provided handwritten notes into clear and readable text.
+  expected_output: >
+    A text file containing the transcribed handwritten notes.
+  agent: ocr_transcriber
+
+report_merging_task:
+  description: >
+    Merge the transcripts from the audio and handwritten notes into a comprehensive report, summarizing key points and creating a cohesive document.
+  expected_output: >
+    A single document combining the transcriptions with a detailed summary of the major points.
+  agent: report_merger

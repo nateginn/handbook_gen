@@ -1,0 +1,78 @@
+import base64
+from openai import OpenAI
+from PIL import Image
+import openai
+import io
+import re
+import os
+
+# Load environment variables from .env file
+from dotenv import load_dotenv
+load_dotenv()
+
+# Set the OpenAI API key from the environment variable
+openai.api_key = os.getenv("OPENAI_API_KEY")
+
+# Initialize OpenAI client
+client = OpenAI()
+
+# Define the input image path and output directory
+input_image_path = "C:\\Users\\nginn\\SE Programs\\PYTHON\\Note_Crew\\input_files\\PI Excellence Notes Day_1.pg1.jpg"
+output_directory = "C:\\Users\\nginn\\SE Programs\\PYTHON\\Note_Crew\\output_txt_files"
+
+# Extract the file name without extension and create the output text file path
+file_name_without_extension = os.path.splitext(os.path.basename(input_image_path))[0]
+output_text_path = os.path.join(output_directory, f"{file_name_without_extension}.txt")
+
+# Open and compress the image
+with Image.open(input_image_path) as img:
+    # Create a BytesIO object to hold the compressed image
+    buffer = io.BytesIO()
+    
+    # Save the image to the buffer with compression
+    img.save(buffer, format="JPEG", optimize=True, quality=70)
+    
+    # Get the compressed binary data
+    compressed_binary_data = buffer.getvalue()
+    
+    # Encode the compressed binary data to base64
+    base64_string = base64.b64encode(compressed_binary_data).decode('utf-8')
+
+# Prepare the message for OpenAI
+messages = [
+    {
+        "role": "user",
+        "content": [
+            {"type": "text", "text": "Respond with the attached form filled out as a plain text transcription."},
+            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_string}"}}
+        ]
+    }
+]
+
+# Call OpenAI API
+response = client.chat.completions.create(
+    model="gpt-4o-mini",
+    messages=messages,
+    max_tokens=1000
+)
+
+# Get the response content
+content = response.choices[0].message.content
+
+# Print the raw response
+print("Raw response:")
+print(content)
+
+# Extract plain text from the response (assuming the response is in plain text format)
+text_match = re.search(r'```(?:txt|text)?\n(.*?)\n```', content, re.DOTALL)
+if text_match:
+    text_content = text_match.group(1)
+else:
+    print("No text found in the response")
+    text_content = content  # Fall back to the entire content if specific text pattern is not found
+
+# Save the output into a TXT file in the specified output directory
+with open(output_text_path, 'w') as f:
+    f.write(text_content)
+
+print(f"\nProcessed text saved to {output_text_path}")

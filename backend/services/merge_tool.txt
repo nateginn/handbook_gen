@@ -1,0 +1,176 @@
+import os
+import requests
+from typing import List, Dict
+from dotenv import load_dotenv
+# from openai import OpenAI  # Uncomment this for GPT-4o mini
+
+load_dotenv()
+
+class MergeTool:
+    def __init__(self):
+        self.summary_dir = r"C:\Users\nginn\SE Programs\PYTHON\Note_Crew\summary_files"
+        os.makedirs(self.summary_dir, exist_ok=True)
+        
+        # GROQ setup
+        self.groq_api_key = os.getenv("GROQ_API_KEY")
+        self.groq_api_base = "https://api.groq.com/openai/v1"
+        self.groq_model = "llama-3.1-70b-versatile"  # Update this line # Adjust as needed
+        
+        # GPT-4o mini setup (commented out)
+        # self.openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        # self.gpt_model = "gpt-4o-mini"
+
+    def get_file_content(self, file_path: str) -> str:
+        encodings = ['utf-8', 'iso-8859-1', 'windows-1252']
+        for encoding in encodings:
+            try:
+                with open(file_path, 'r', encoding=encoding) as file:
+                    return file.read()
+            except UnicodeDecodeError:
+                continue
+        print(f"Error: Unable to read file {file_path} with any of the attempted encodings.")
+        return ""
+
+    def groq_generate(self, prompt: str, max_tokens: int = 1000) -> str:
+        url = f"{self.groq_api_base}/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {self.groq_api_key}",
+            "Content-Type": "application/json"
+        }
+        data = {
+            "model": self.groq_model,
+            "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": max_tokens
+        }
+        response = requests.post(url, headers=headers, json=data)
+        if response.status_code == 200:
+            return response.json()['choices'][0]['message']['content']
+        else:
+            print(f"Error in GROQ API call: {response.text}")
+            return None
+
+    # GPT-4o mini generate function (commented out)
+    # def gpt_generate(self, prompt: str, max_tokens: int = 1000) -> str:
+    #     try:
+    #         response = self.openai_client.chat.completions.create(
+    #             model=self.gpt_model,
+    #             messages=[{"role": "user", "content": prompt}],
+    #             max_tokens=max_tokens
+    #         )
+    #         return response.choices[0].message.content
+    #     except Exception as e:
+    #         print(f"Error in GPT-4o mini API call: {str(e)}")
+    #         return None
+
+    def generate(self, prompt: str, max_tokens: int = 1000) -> str:
+        return self.groq_generate(prompt, max_tokens)
+        # Uncomment below and comment out the line above to use GPT-4o mini
+        # return self.gpt_generate(prompt, max_tokens)
+
+    def extract_sections(self, notes_content: str) -> Dict[str, List[str]]:
+        sections = {}
+        current_section = "General"
+        sections[current_section] = []
+
+        for line in notes_content.split('\n'):
+            line = line.strip()
+            if line and line[0].isupper() and line[-1] == ':':
+                current_section = line[:-1]
+                sections[current_section] = []
+            elif line:
+                sections[current_section].append(line)
+
+        return sections
+
+    def expand_section(self, section_name: str, section_points: List[str], audio_chunk: str) -> str:
+        prompt = f"""Expand on the following section from handwritten notes using information from the audio transcript. 
+        Follow these guidelines:
+        1. Use the section points as a framework.
+        2. Add relevant details, explanations, or examples from the audio transcript.
+        3. Maintain the original structure and order of the points.
+        4. If the audio provides additional important points not in the notes, include them.
+        5. Keep the expanded section concise but informative.
+
+        Section: {section_name}
+        Points:
+        {chr(10).join('- ' + point for point in section_points)}
+
+        Audio transcript chunk:
+        {audio_chunk}
+
+        Please provide the expanded section:"""
+
+        return self.generate(prompt, max_tokens=1000)
+
+    def extract_qa_section(self, audio_content: str) -> str:
+        prompt = f"""Extract the question and answer section from the following audio transcript. 
+        Format each Q&A pair clearly, with the question on one line and the answer on the next. 
+        If there is no clear Q&A section, return "No Q&A section found."
+
+        Audio transcript:
+        {audio_content}"""
+
+        return self.generate(prompt, max_tokens=1000)
+
+    def merge_and_summarize(self, file_paths: List[str]) -> str:
+        notes_content = ""
+        audio_content = ""
+        
+        for file_path in file_paths:
+            content = self.get_file_content(file_path)
+            if content:
+                if "Notes" in file_path:
+                    notes_content += content + "\n\n"
+                elif "transcription" in file_path:
+                    audio_content += content + "\n\n"
+            else:
+                print(f"Warning: Skipping file {file_path} due to reading error.")
+
+        if not notes_content or not audio_content:
+            print("Error: Missing either notes or audio content.")
+            return None
+
+        sections = self.extract_sections(notes_content)
+        
+        audio_chunks = self.chunk_text(audio_content, 2000)
+        
+        expanded_summary = ""
+        for section_name, section_points in sections.items():
+            for chunk in audio_chunks:
+                expanded_section = self.expand_section(section_name, section_points, chunk)
+                expanded_summary += expanded_section + "\n\n"
+
+        qa_section = self.extract_qa_section(audio_content)
+        
+        final_summary = f"{expanded_summary}\n\nQuestion and Answer Section:\n{qa_section}"
+        return final_summary
+
+    def chunk_text(self, text: str, chunk_size: int = 2000) -> List[str]:
+        words = text.split()
+        chunks = []
+        current_chunk = []
+        current_size = 0
+        for word in words:
+            if current_size + len(word) > chunk_size:
+                chunks.append(' '.join(current_chunk))
+                current_chunk = [word]
+                current_size = len(word)
+            else:
+                current_chunk.append(word)
+                current_size += len(word) + 1  # +1 for the space
+        if current_chunk:
+            chunks.append(' '.join(current_chunk))
+        return chunks
+
+    def save_output(self, content: str, file_name: str):
+        file_path = os.path.join(self.summary_dir, f"{file_name}.txt")
+        with open(file_path, 'w', encoding='utf-8') as file:
+            file.write(content)
+        print(f"Summary saved to: {file_path}")
+
+    def process_files(self, file_paths: List[str], file_name: str):
+        result = self.merge_and_summarize(file_paths)
+        if result:
+            self.save_output(result, file_name)
+        else:
+            print("Failed to generate summary")
