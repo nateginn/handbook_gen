@@ -1,0 +1,28 @@
+[tool.poetry]
+name = "handbook-gen"
+version = "0.1.0"
+description = "handbook generator with files from various sources"
+authors = ["nate ginn <growyourbiz4ever@gmail.com>"]
+license = "MIT"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = ">=3.12,<=3.13"
+crewai = "^0.51.1"
+crewai-tools = "^0.8.3"
+pytesseract = "^0.3.13"
+pillow = "^10.4.0"
+python-dotenv = "^1.0.1"
+openai-whisper = {git = "https://github.com/openai/whisper.git"}
+langchain-openai = "^0.1.22"
+soundfile = "^0.12.1"
+pydub = "^0.25.1"
+torch = {url = "https://download.pytorch.org/whl/cu121/torch-2.2.0%2Bcu121-cp312-cp312-win_amd64.whl"}
+torchvision = {url = "https://download.pytorch.org/whl/cu121/torchvision-0.17.0%2Bcu121-cp312-cp312-win_amd64.whl"}
+torchaudio = {url = "https://download.pytorch.org/whl/cu121/torchaudio-2.2.0%2Bcu121-cp312-cp312-win_amd64.whl"}
+
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
