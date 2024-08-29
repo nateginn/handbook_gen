@@ -1,0 +1,15 @@
+# Environment and dependencies
+.env
+.venv/
+poetry.lock
+
+# Large data folders
+input_files/
+output_files_audio/
+handbook_files/
+summary_files/
+
+# Large file types
+*.wav
+*.jpg
+*.mp3
